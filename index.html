@@ -41,13 +41,11 @@
     background-image: radial-gradient(ellipse 80% 50% at 50% -20%, rgba(201,168,76,0.08) 0%, transparent 60%);
   }
 
-  /* LOGIN */
+  /* ── LOGIN ── */
   #loginScreen {
     position: fixed; inset: 0;
     background: var(--bg);
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    display: flex; align-items: center; justify-content: center;
     z-index: 999;
   }
   .login-box {
@@ -57,10 +55,7 @@
     padding: 36px 32px;
     width: 300px;
     box-shadow: 0 20px 60px rgba(0,0,0,0.6);
-    display: flex;
-    flex-direction: column;
-    gap: 14px;
-    align-items: center;
+    display: flex; flex-direction: column; gap: 14px; align-items: center;
   }
   .login-logo { font-family: 'Bebas Neue', sans-serif; font-size: 28px; letter-spacing: 4px; color: var(--accent); text-shadow: 0 0 20px rgba(201,168,76,0.4); }
   .login-label { font-size: 11px; color: var(--text-dim); letter-spacing: 2px; text-transform: uppercase; align-self: flex-start; }
@@ -68,35 +63,44 @@
   .login-input:focus { border-color: var(--accent); }
   .login-btn { width: 100%; background: var(--accent); border: none; border-radius: 8px; color: #000; font-family: inherit; font-size: 14px; font-weight: 700; padding: 12px; cursor: pointer; letter-spacing: 1px; transition: opacity 0.15s; }
   .login-btn:hover { opacity: 0.85; }
-  .login-note { font-size: 10px; color: var(--text-dim); text-align: center; line-height: 1.6; }
   .login-error { font-size: 11px; color: var(--red); text-align: center; display: none; }
+  .login-note { font-size: 10px; color: var(--text-dim); text-align: center; line-height: 1.6; }
 
-  /* APP */
-  #appScreen { display: none; grid-template-columns: 220px 1fr; min-height: 100vh; }
+  /* ── APP ── */
+  #appScreen { display: none; flex-direction: column; min-height: 100vh; }
 
+  /* ── HEADER ── */
   .app-header {
-    grid-column: 1 / -1;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
+    display: flex; align-items: center; justify-content: space-between;
     padding: 10px 16px;
     border-bottom: 1px solid var(--border);
     background: rgba(19,19,28,0.98);
-    gap: 10px;
-    flex-wrap: wrap;
+    gap: 8px; flex-wrap: wrap;
+    flex-shrink: 0;
   }
   .logo { font-family: 'Bebas Neue', sans-serif; font-size: 20px; letter-spacing: 3px; color: var(--accent); text-shadow: 0 0 20px rgba(201,168,76,0.4); }
-  .header-center { display: flex; gap: 6px; align-items: center; }
-  .vm-btn { background: var(--surface2); border: 1px solid var(--border); color: var(--text-dim); font-size: 11px; font-weight: 600; padding: 5px 12px; border-radius: 6px; cursor: pointer; font-family: inherit; transition: all 0.15s; white-space: nowrap; }
+  .header-center { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  .vm-btn { background: var(--surface2); border: 1px solid var(--border); color: var(--text-dim); font-size: 11px; font-weight: 600; padding: 5px 10px; border-radius: 6px; cursor: pointer; font-family: inherit; transition: all 0.15s; white-space: nowrap; }
   .vm-btn.active { background: var(--accent); border-color: var(--accent); color: #000; }
-  .header-right { display: flex; align-items: center; gap: 10px; }
+  .header-right { display: flex; align-items: center; gap: 8px; }
   .room-badge { font-size: 10px; letter-spacing: 1px; color: var(--accent); background: rgba(201,168,76,0.1); border: 1px solid rgba(201,168,76,0.3); border-radius: 5px; padding: 3px 8px; }
   .header-time { font-size: 12px; color: var(--text-dim); font-variant-numeric: tabular-nums; }
   .logout-btn { background: transparent; border: 1px solid var(--border); color: var(--text-dim); font-size: 11px; padding: 4px 10px; border-radius: 5px; cursor: pointer; font-family: inherit; transition: all 0.15s; }
   .logout-btn:hover { border-color: var(--red); color: var(--red); }
 
-  /* SIDEBAR */
-  #sidebar { background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; position: sticky; top: 0; height: 100vh; overflow: hidden; }
+  /* ── BODY AREA (sidebar + main) ── */
+  .app-body { display: flex; flex: 1; overflow: hidden; }
+
+  /* ── SIDEBAR ── */
+  #sidebar {
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    display: flex; flex-direction: column;
+    width: 220px; flex-shrink: 0;
+    height: calc(100vh - 49px);
+    position: sticky; top: 0;
+    overflow: hidden;
+  }
   .sidebar-header { padding: 12px 14px 10px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
   .sidebar-title { font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: var(--text-dim); }
   .cast-count { background: var(--accent); color: #000; font-size: 10px; font-weight: 700; border-radius: 10px; padding: 1px 7px; }
@@ -116,20 +120,26 @@
   .cast-actions { display: flex; gap: 4px; }
   .cast-actions button { background: var(--border); border: none; color: var(--text-dim); font-size: 10px; padding: 3px 8px; border-radius: 4px; cursor: pointer; font-family: inherit; transition: all 0.15s; flex: 1; }
   .cast-actions button:hover { background: var(--accent); color: #000; }
-  .add-cast { padding: 10px; border-top: 1px solid var(--border); display: flex; gap: 6px; flex-shrink: 0; }
-  .add-cast input { flex: 1; background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-family: inherit; font-size: 12px; padding: 7px 10px; outline: none; transition: border-color 0.2s; }
+
+  /* キャスト追加（スマホでも見えるよう固定） */
+  .add-cast {
+    padding: 10px;
+    border-top: 1px solid var(--border);
+    display: flex; gap: 6px;
+    flex-shrink: 0;
+    background: var(--surface);
+  }
+  .add-cast input { flex: 1; min-width: 0; background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-family: inherit; font-size: 12px; padding: 7px 8px; outline: none; transition: border-color 0.2s; }
   .add-cast input:focus { border-color: var(--accent); }
   .add-cast input::placeholder { color: var(--text-dim); }
-  .btn-add { background: var(--accent); border: none; color: #000; font-weight: 700; font-size: 18px; width: 34px; border-radius: 6px; cursor: pointer; transition: opacity 0.15s; flex-shrink: 0; }
+  .btn-add { background: var(--accent); border: none; color: #000; font-weight: 700; font-size: 18px; width: 36px; min-width: 36px; height: 36px; border-radius: 6px; cursor: pointer; transition: opacity 0.15s; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
   .btn-add:hover { opacity: 0.8; }
 
-  /* MAIN */
-  #mainArea { padding: 12px; overflow-y: auto; }
+  /* ── MAIN (操作画面 / 全体) ── */
+  #mainArea { flex: 1; padding: 12px; overflow-y: auto; }
   .main-tabs { display: flex; gap: 8px; margin-bottom: 12px; }
   .main-tab { background: var(--surface2); border: 1px solid var(--border); color: var(--text-dim); font-size: 12px; font-weight: 700; padding: 7px 20px; border-radius: 7px; cursor: pointer; font-family: inherit; letter-spacing: 1px; transition: all 0.15s; }
   .main-tab.active { background: var(--accent); border-color: var(--accent); color: #000; }
-
-  /* TABLE LAYOUT */
   .tables-layout { display: flex; gap: 12px; align-items: flex-start; }
   .table-col { display: flex; flex-direction: column; gap: 12px; flex: 1; }
   .table-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; transition: border-color 0.2s; }
@@ -183,6 +193,156 @@
   .active-pulse { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--green); box-shadow: 0 0 6px var(--green); animation: pulse 1.5s infinite; }
   @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
 
+  /* ── 席のみ表示 ── */
+  #tableOnlyView {
+    display: none;
+    padding: 12px;
+    overflow-y: auto;
+    flex: 1;
+  }
+
+  /* 写真の配置:
+     右列: 1,2,3,4,5  左列: 7,8,9,10  6は5の左隣（下部横並び）
+     実装: 右列(1-4)と左列(7-10)を上部に並べ、下部に6と5を横並び
+  */
+  .tov-layout {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    height: 100%;
+  }
+  /* 左エリア: 7,8,9,10 + 下に6 */
+  .tov-left {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    flex: 1;
+  }
+  /* 右エリア: 1,2,3,4 + 下に5 */
+  .tov-right {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    flex: 1;
+  }
+  /* 下部の横並びエリア（6と5） */
+  .tov-bottom-row {
+    display: flex;
+    gap: 8px;
+    align-items: flex-start;
+  }
+  /* 席カード（席のみ表示用） */
+  .tov-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px;
+    transition: border-color 0.2s;
+    flex: 1;
+  }
+  .tov-card.active { border-color: var(--accent); box-shadow: 0 0 12px rgba(201,168,76,0.15); }
+  .tov-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+  }
+  .tov-num {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 20px;
+    letter-spacing: 1px;
+    color: var(--accent);
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .tov-timer {
+    font-size: 12px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    color: var(--text-dim);
+  }
+  .tov-timer.running { color: var(--accent2); }
+  .tov-guests {
+    font-size: 11px;
+    color: var(--text-dim);
+    margin-bottom: 6px;
+  }
+  .tov-names {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .tov-name-chip {
+    font-size: 12px;
+    font-weight: 600;
+    padding: 4px 8px;
+    border-radius: 5px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .tov-name-chip.nomination { background: rgba(224,90,122,0.2); color: var(--nomination); }
+  .tov-name-chip.floor-nom  { background: rgba(168,85,247,0.2); color: var(--floor); }
+  .tov-name-chip.help       { background: rgba(74,158,255,0.15); color: var(--help); }
+  .tov-name-chip.leave      { background: rgba(100,100,120,0.15); color: var(--leave); }
+  .tov-name-chip.ghost      { opacity: 0.4; }
+  .tov-empty { font-size: 11px; color: var(--text-dim); text-align: center; padding: 6px 0; }
+
+  /* ── キャストのみ表示 ── */
+  #castOnlyView {
+    display: none;
+    flex: 1;
+    padding: 16px;
+    overflow-y: auto;
+  }
+  .cov-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 12px;
+  }
+  .cov-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px 12px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    transition: border-color 0.2s;
+  }
+  .cov-card.on-table { border-color: var(--accent); }
+  .cov-name {
+    font-size: 18px;
+    font-weight: 700;
+    text-align: center;
+    color: var(--text);
+  }
+  .cov-table {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 28px;
+    color: var(--accent);
+    letter-spacing: 1px;
+    line-height: 1;
+  }
+  .cov-table-label {
+    font-size: 10px;
+    color: var(--text-dim);
+    letter-spacing: 1px;
+  }
+  .cov-type {
+    font-size: 10px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-weight: 700;
+  }
+  .cov-type.nomination { background: var(--nomination); color: #fff; }
+  .cov-type.floor-nom  { background: var(--floor);      color: #fff; }
+  .cov-type.help       { background: var(--help);        color: #fff; }
+  .cov-type.leave      { background: var(--leave);       color: #fff; }
+  .cov-free { font-size: 11px; color: var(--text-dim); }
+
   /* MODAL */
   .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 200; align-items: center; justify-content: center; }
   .modal-overlay.show { display: flex; }
@@ -196,13 +356,11 @@
   .btn-confirm { background: var(--accent); color: #000; }
   .btn-cancel  { background: var(--surface2); color: var(--text-dim); border: 1px solid var(--border) !important; }
 
+  /* スマホ */
   @media (max-width: 600px) {
     html { font-size: 86.7%; }
-    #appScreen { grid-template-columns: 150px 1fr !important; }
-    #mainArea { padding: 8px; }
-    .tables-layout { flex-direction: column; }
-    .table-col { flex-direction: row; flex-wrap: wrap; }
-    .table-col .table-card { flex: 1; min-width: 140px; }
+    #sidebar { width: 150px; }
+    .cov-grid { grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); }
   }
 </style>
 </head>
@@ -223,10 +381,12 @@
 
 <!-- APP -->
 <div id="appScreen">
-  <div class="app-header" style="grid-column:1/-1">
+
+  <!-- HEADER -->
+  <div class="app-header">
     <div class="logo">FLOOR MANAGER</div>
     <div class="header-center">
-      <button class="vm-btn active" id="vm_all"    onclick="setViewMode('all')">全体</button>
+      <button class="vm-btn active" id="vm_all"    onclick="setViewMode('all')">操作画面</button>
       <button class="vm-btn"        id="vm_tables" onclick="setViewMode('tables')">席のみ</button>
       <button class="vm-btn"        id="vm_cast"   onclick="setViewMode('cast')">キャストのみ</button>
     </div>
@@ -237,30 +397,47 @@
     </div>
   </div>
 
-  <div id="sidebar">
-    <div class="sidebar-header">
-      <span class="sidebar-title">CAST</span>
-      <span class="cast-count" id="castCount">0</span>
-    </div>
-    <div class="page-tabs">
-      <button class="page-tab active" id="sideTab1" onclick="switchPage(1)">席 1–5</button>
-      <button class="page-tab"        id="sideTab2" onclick="switchPage(2)">席 6–10</button>
-    </div>
-    <div class="cast-list" id="girls"></div>
-    <div class="add-cast">
-      <input type="text" id="newGirl" placeholder="キャスト名…" onkeydown="if(event.key==='Enter')addGirl()">
-      <button class="btn-add" onclick="addGirl()">+</button>
-    </div>
-  </div>
+  <!-- BODY -->
+  <div class="app-body">
 
-  <div id="mainArea">
-    <div class="main-tabs">
-      <button class="main-tab active" id="mainTab1" onclick="switchPage(1)">席 1〜5</button>
-      <button class="main-tab"        id="mainTab2" onclick="switchPage(2)">席 6〜10</button>
+    <!-- SIDEBAR (操作画面のみ表示) -->
+    <div id="sidebar">
+      <div class="sidebar-header">
+        <span class="sidebar-title">CAST</span>
+        <span class="cast-count" id="castCount">0</span>
+      </div>
+      <div class="page-tabs">
+        <button class="page-tab active" id="sideTab1" onclick="switchPage(1)">席 1–5</button>
+        <button class="page-tab"        id="sideTab2" onclick="switchPage(2)">席 6–10</button>
+      </div>
+      <div class="cast-list" id="girls"></div>
+      <div class="add-cast">
+        <input type="text" id="newGirl" placeholder="キャスト名…" onkeydown="if(event.key==='Enter')addGirl()">
+        <button class="btn-add" onclick="addGirl()">+</button>
+      </div>
     </div>
-    <div id="tables"></div>
-  </div>
-</div>
+
+    <!-- 操作画面（全体） -->
+    <div id="mainArea">
+      <div class="main-tabs">
+        <button class="main-tab active" id="mainTab1" onclick="switchPage(1)">席 1〜5</button>
+        <button class="main-tab"        id="mainTab2" onclick="switchPage(2)">席 6〜10</button>
+      </div>
+      <div id="tables"></div>
+    </div>
+
+    <!-- 席のみ表示 -->
+    <div id="tableOnlyView">
+      <div class="tov-layout" id="tovLayout"></div>
+    </div>
+
+    <!-- キャストのみ表示 -->
+    <div id="castOnlyView">
+      <div class="cov-grid" id="covGrid"></div>
+    </div>
+
+  </div><!-- /.app-body -->
+</div><!-- /#appScreen -->
 
 <!-- Edit Modal -->
 <div class="modal-overlay" id="editModal">
@@ -286,26 +463,24 @@ const FIREBASE_CONFIG = {
   appId: "1:557396940135:web:26a7311dbfb55d376c8bc2"
 };
 
-// ── グローバル変数 ──
-let DB = null;
-let dbSet = null, dbRef = null, dbOnValue = null, dbUpdate = null;
+let DB = null, dbSet = null, dbRef = null, dbOnValue = null;
 let roomId = null;
 let state = { girls: [], tables: {} };
 let currentPage = 1;
 let editTarget = null;
 let suppressRemote = false;
 let unsubscribe = null;
+let currentMode = "all";
 
-// ── Firebase動的ロード ──
+// ── Firebase初期化 ──
 async function initFirebase() {
   const { initializeApp } = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js");
-  const { getDatabase, ref, set, onValue, update } = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js");
+  const { getDatabase, ref, set, onValue } = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js");
   const app = initializeApp(FIREBASE_CONFIG);
   DB = getDatabase(app);
   dbRef = (path) => ref(DB, path);
   dbSet = set;
   dbOnValue = onValue;
-  dbUpdate = update;
 }
 
 // ── ログイン ──
@@ -313,14 +488,13 @@ async function doLogin() {
   const id = document.getElementById("roomInput").value.trim();
   if (!id) return;
   document.getElementById("loginError").style.display = "none";
-
   try {
     if (!DB) await initFirebase();
     roomId = id;
     localStorage.setItem("lastRoom", id);
     document.getElementById("roomLabel").textContent = "ROOM: " + id;
     document.getElementById("loginScreen").style.display = "none";
-    document.getElementById("appScreen").style.display = "grid";
+    document.getElementById("appScreen").style.display = "flex";
     startListening();
     render();
   } catch(e) {
@@ -338,26 +512,21 @@ function doLogout() {
 }
 
 // ── Firebase同期 ──
-function roomPath() { return `rooms/${roomId}/state`; }
-
 function pushState() {
   if (!roomId || !dbSet) return;
   suppressRemote = true;
-  dbSet(dbRef(roomPath()), JSON.stringify(state)).finally(() => {
+  dbSet(dbRef(`rooms/${roomId}/state`), JSON.stringify(state)).finally(() => {
     setTimeout(() => { suppressRemote = false; }, 800);
   });
 }
 
 function startListening() {
   if (unsubscribe) unsubscribe();
-  unsubscribe = dbOnValue(dbRef(roomPath()), (snap) => {
+  unsubscribe = dbOnValue(dbRef(`rooms/${roomId}/state`), (snap) => {
     if (suppressRemote) return;
     const raw = snap.val();
     if (!raw) return;
-    try {
-      state = JSON.parse(raw);
-      render();
-    } catch(e) {}
+    try { state = JSON.parse(raw); render(); } catch(e) {}
   });
 }
 
@@ -369,49 +538,32 @@ function updateClock() {
 setInterval(updateClock, 1000);
 updateClock();
 
-// ── 時間フォーマット ──
+// ── ユーティリティ ──
 function formatTime(ms) {
-  let s = Math.floor(ms / 1000);
-  let h = Math.floor(s / 3600);
-  let m = Math.floor((s % 3600) / 60);
-  let sec = s % 60;
+  let s = Math.floor(ms / 1000), h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
   if (h > 0) return `${h}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`;
   return `${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`;
 }
-
 function getTableElapsed(tbl) {
   if (!tbl.active) return tbl.elapsed || 0;
   return (tbl.elapsed || 0) + (Date.now() - (tbl.startedAt || Date.now()));
 }
-
 function getTypeClass(type) {
-  if (type === "指名")    return "nomination";
+  if (type === "指名") return "nomination";
   if (type === "場内指名") return "floor-nom";
   if (type === "一時離席") return "leave";
   return "help";
 }
 
-// ── 表示モード ──
+// ── 表示モード切替 ──
 function setViewMode(mode) {
-  ["all","tables","cast"].forEach(m => {
-    document.getElementById("vm_" + m).classList.toggle("active", m === mode);
-  });
-  const sidebar  = document.getElementById("sidebar");
-  const mainArea = document.getElementById("mainArea");
-  const app      = document.getElementById("appScreen");
-  if (mode === "tables") {
-    sidebar.style.display  = "none";
-    mainArea.style.display = "";
-    app.style.gridTemplateColumns = "1fr";
-  } else if (mode === "cast") {
-    sidebar.style.display  = "";
-    mainArea.style.display = "none";
-    app.style.gridTemplateColumns = "220px";
-  } else {
-    sidebar.style.display  = "";
-    mainArea.style.display = "";
-    app.style.gridTemplateColumns = "220px 1fr";
-  }
+  currentMode = mode;
+  ["all","tables","cast"].forEach(m => document.getElementById("vm_" + m).classList.toggle("active", m === mode));
+  document.getElementById("sidebar").style.display        = mode === "all" ? "" : "none";
+  document.getElementById("mainArea").style.display       = mode === "all" ? "" : "none";
+  document.getElementById("tableOnlyView").style.display  = mode === "tables" ? "" : "none";
+  document.getElementById("castOnlyView").style.display   = mode === "cast" ? "" : "none";
+  render();
 }
 
 // ── ページ切替 ──
@@ -423,12 +575,16 @@ function switchPage(page) {
   });
   render();
 }
+function pageRange() { return currentPage === 1 ? [1,2,3,4,5] : [6,7,8,9,10]; }
 
-function pageRange() {
-  return currentPage === 1 ? [1,2,3,4,5] : [6,7,8,9,10];
+// ── メインレンダリング ──
+function render() {
+  if (currentMode === "all")    { renderGirls(); renderTables(); }
+  if (currentMode === "tables") { renderTableOnly(); }
+  if (currentMode === "cast")   { renderCastOnly(); }
 }
 
-// ── キャスト表示 ──
+// ── キャスト表示（操作画面） ──
 function renderGirls() {
   const g = document.getElementById("girls");
   if (!g) return;
@@ -450,25 +606,19 @@ function renderGirls() {
   });
 }
 
-// ── 席表示 ──
+// ── 操作画面の席 ──
 function renderTables() {
   const container = document.getElementById("tables");
   if (!container) return;
   container.innerHTML = "";
-
   const leftIds  = currentPage === 1 ? [1,2,3,4] : [6,7,8,9];
   const rightIds = currentPage === 1 ? [5]        : [10];
-
-  const wrapper  = document.createElement("div");
+  const wrapper = document.createElement("div");
   wrapper.className = "tables-layout";
-  const leftCol  = document.createElement("div");
-  leftCol.className = "table-col";
-  const rightCol = document.createElement("div");
-  rightCol.className = "table-col";
-
+  const leftCol = document.createElement("div"); leftCol.className = "table-col";
+  const rightCol = document.createElement("div"); rightCol.className = "table-col";
   leftIds.forEach(i  => leftCol.appendChild(buildCard(i)));
   rightIds.forEach(i => rightCol.appendChild(buildCard(i)));
-
   wrapper.appendChild(leftCol);
   wrapper.appendChild(rightCol);
   container.appendChild(wrapper);
@@ -481,21 +631,18 @@ function buildCard(i) {
   const elapsed = getTableElapsed(tbl);
   const card = document.createElement("div");
   card.className = "table-card" + (tbl.active ? " active" : "");
-
   let girlsHtml = "";
   if (!tbl.girls || tbl.girls.length === 0) {
     girlsHtml = `<div class="empty-table">— 空席 —</div>`;
   } else {
     tbl.girls.forEach((g, idx) => {
-      const cls  = getTypeClass(g.type);
-      const fade = g.isGhost ? " fade" : "";
-      const t    = g.isGhost ? formatTime(g.frozenTime || g.time || 0) : formatTime(g.time || 0);
+      const cls = getTypeClass(g.type), fade = g.isGhost ? " fade" : "";
+      const t = g.isGhost ? formatTime(g.frozenTime || g.time || 0) : formatTime(g.time || 0);
       girlsHtml += `
         <div class="assigned ${cls}${fade}">
           <div class="assigned-top">
             <div class="assigned-name">
-              <span>${g.name}</span>
-              <span class="type-badge">${g.type}</span>
+              <span>${g.name}</span><span class="type-badge">${g.type}</span>
               ${g.isGhost ? '<span class="ghost-label">移動中</span>' : ''}
             </div>
             <div style="display:flex;align-items:center;gap:4px">
@@ -503,20 +650,16 @@ function buildCard(i) {
               <button class="remove-btn" onclick="removeGirl(${i},${idx})">✕</button>
             </div>
           </div>
-          ${g.isGhost ? `
-            <div class="assigned-btns">
-              <button class="restore-btn" onclick="restore(${i},${idx})">↩ 戻す</button>
-            </div>` : `
-            <div class="assigned-btns">
-              <button class="type-btn ${g.type==='指名'?'active-nomination':''}"    onclick="setType(${i},${idx},'指名')">指名</button>
-              <button class="type-btn ${g.type==='場内指名'?'active-floor':''}"    onclick="setType(${i},${idx},'場内指名')">場内</button>
-              <button class="type-btn ${g.type==='ヘルプ'?'active-help':''}"       onclick="setType(${i},${idx},'ヘルプ')">ヘルプ</button>
-              <button class="type-btn ${g.type==='一時離席'?'active-leave':''}"    onclick="setType(${i},${idx},'一時離席')">離席</button>
-            </div>`}
+          ${g.isGhost ? `<div class="assigned-btns"><button class="restore-btn" onclick="restore(${i},${idx})">↩ 戻す</button></div>` : `
+          <div class="assigned-btns">
+            <button class="type-btn ${g.type==='指名'?'active-nomination':''}"    onclick="setType(${i},${idx},'指名')">指名</button>
+            <button class="type-btn ${g.type==='場内指名'?'active-floor':''}"    onclick="setType(${i},${idx},'場内指名')">場内</button>
+            <button class="type-btn ${g.type==='ヘルプ'?'active-help':''}"       onclick="setType(${i},${idx},'ヘルプ')">ヘルプ</button>
+            <button class="type-btn ${g.type==='一時離席'?'active-leave':''}"    onclick="setType(${i},${idx},'一時離席')">離席</button>
+          </div>`}
         </div>`;
     });
   }
-
   card.innerHTML = `
     <div class="table-header">
       <div class="table-num">${tbl.active ? '<span class="active-pulse"></span>' : ''}席 ${i}</div>
@@ -538,23 +681,119 @@ function buildCard(i) {
   return card;
 }
 
-function render() { renderGirls(); renderTables(); }
+// ── 席のみ表示 ──
+// 配置: 右列=1,2,3,4 + 下に5  左列=7,8,9,10 + 下に6（5の左隣）
+function renderTableOnly() {
+  const layout = document.getElementById("tovLayout");
+  if (!layout) return;
+  layout.innerHTML = "";
 
-// ── タイマーローカル更新（毎秒・Firebase書き込みなし） ──
+  // 左エリア（7,8,9,10 + 下にスペーサー）
+  const leftArea = document.createElement("div");
+  leftArea.className = "tov-left";
+  [7,8,9,10].forEach(i => leftArea.appendChild(buildTovCard(i)));
+  // 左エリア下部に6を配置（右エリアの5に対応）
+  const leftBottom = document.createElement("div");
+  leftBottom.className = "tov-bottom-row";
+  leftBottom.appendChild(buildTovCard(6));
+  leftArea.appendChild(leftBottom);
+
+  // 右エリア（1,2,3,4 + 下に5）
+  const rightArea = document.createElement("div");
+  rightArea.className = "tov-right";
+  [1,2,3,4].forEach(i => rightArea.appendChild(buildTovCard(i)));
+  const rightBottom = document.createElement("div");
+  rightBottom.className = "tov-bottom-row";
+  rightBottom.appendChild(buildTovCard(5));
+  rightArea.appendChild(rightBottom);
+
+  layout.appendChild(leftArea);
+  layout.appendChild(rightArea);
+}
+
+function buildTovCard(i) {
+  if (!state.tables) state.tables = {};
+  if (!state.tables[i]) state.tables[i] = { girls: [], elapsed: 0, active: false };
+  const tbl = state.tables[i];
+  const elapsed = getTableElapsed(tbl);
+  const card = document.createElement("div");
+  card.className = "tov-card" + (tbl.active ? " active" : "");
+
+  const guests = tbl.guests || 0;
+  let namesHtml = "";
+  const activeGirls = (tbl.girls || []).filter(g => !g.isGhost);
+  if (activeGirls.length === 0) {
+    namesHtml = `<div class="tov-empty">空席</div>`;
+  } else {
+    activeGirls.forEach(g => {
+      const cls = getTypeClass(g.type);
+      namesHtml += `<div class="tov-name-chip ${cls}">${g.name}</div>`;
+    });
+  }
+
+  card.innerHTML = `
+    <div class="tov-card-header">
+      <div class="tov-num">${tbl.active ? '<span class="active-pulse"></span>' : ''}席${i}</div>
+      <span class="tov-timer ${tbl.active ? 'running' : ''}" id="tovtmr_${i}">${formatTime(elapsed)}</span>
+    </div>
+    ${guests > 0 ? `<div class="tov-guests">👤 ${guests}名</div>` : ''}
+    <div class="tov-names">${namesHtml}</div>`;
+  return card;
+}
+
+// ── キャストのみ表示 ──
+function renderCastOnly() {
+  const grid = document.getElementById("covGrid");
+  if (!grid) return;
+  grid.innerHTML = "";
+
+  // どの席にいるか逆引きマップ
+  const castTableMap = {}; // name -> {tableId, type}
+  Object.entries(state.tables || {}).forEach(([tid, tbl]) => {
+    (tbl.girls || []).forEach(g => {
+      if (!g.isGhost) {
+        castTableMap[g.name] = { tableId: Number(tid), type: g.type };
+      }
+    });
+  });
+
+  (state.girls || []).forEach(name => {
+    const info = castTableMap[name];
+    const card = document.createElement("div");
+    card.className = "cov-card" + (info ? " on-table" : "");
+    if (info) {
+      const cls = getTypeClass(info.type);
+      card.innerHTML = `
+        <div class="cov-name">${name}</div>
+        <div class="cov-table">${info.tableId}</div>
+        <div class="cov-table-label">席</div>
+        <span class="cov-type ${cls}">${info.type}</span>`;
+    } else {
+      card.innerHTML = `
+        <div class="cov-name">${name}</div>
+        <div class="cov-free">待機中</div>`;
+    }
+    grid.appendChild(card);
+  });
+}
+
+// ── タイマーローカル更新 ──
 setInterval(() => {
   Object.keys(state.tables || {}).forEach(id => {
     const t = state.tables[id];
     if (!t.active) return;
     const elapsed = getTableElapsed(t);
-    const el = document.getElementById(`tmr_${id}`);
-    if (el) el.textContent = formatTime(elapsed);
+    const el1 = document.getElementById(`tmr_${id}`);
+    const el2 = document.getElementById(`tovtmr_${id}`);
+    if (el1) el1.textContent = formatTime(elapsed);
+    if (el2) el2.textContent = formatTime(elapsed);
     (t.girls || []).forEach(g => {
       if (!g.isGhost && g.type !== "一時離席") g.time = (g.time || 0) + 1000;
     });
   });
 }, 1000);
 
-// キャストタイムを10秒ごとにFirebaseへ同期
+// キャストタイムを10秒ごとにFirebase同期
 setInterval(() => {
   const anyActive = Object.values(state.tables || {}).some(t => t.active);
   if (anyActive && roomId) pushState();
@@ -565,21 +804,16 @@ function toggleTimer(id) {
   if (!state.tables[id]) state.tables[id] = { girls: [], elapsed: 0, active: false };
   const t = state.tables[id];
   if (t.active) {
-    t.elapsed   = (t.elapsed || 0) + (Date.now() - (t.startedAt || Date.now()));
-    t.active    = false;
-    t.startedAt = null;
+    t.elapsed = (t.elapsed || 0) + (Date.now() - (t.startedAt || Date.now()));
+    t.active = false; t.startedAt = null;
   } else {
-    t.startedAt = Date.now();
-    t.active    = true;
+    t.startedAt = Date.now(); t.active = true;
   }
-  pushState();
-  renderTables();
+  pushState(); renderTables();
 }
-
 function resetTable(id) {
   state.tables[id] = { girls: [], elapsed: 0, active: false, guests: 0 };
-  pushState();
-  renderTables();
+  pushState(); renderTables();
 }
 
 // ── キャスト操作 ──
@@ -588,7 +822,6 @@ function assignToTable(name, tableId) {
   if (!state.tables[tableId]) state.tables[tableId] = { girls: [], elapsed: 0, active: false };
   const target = state.tables[tableId];
   if ((target.girls || []).some(g => g.name === name && !g.isGhost)) return;
-
   Object.entries(state.tables).forEach(([tid, tbl]) => {
     if (Number(tid) === tableId) return;
     (tbl.girls || []).forEach(g => {
@@ -599,36 +832,28 @@ function assignToTable(name, tableId) {
     });
     tbl.girls = (tbl.girls || []).filter(g => !g._remove);
   });
-
   target.girls.push({ name, type: "ヘルプ", time: 0, isGhost: false });
-  pushState();
-  renderTables();
+  pushState(); renderTables();
 }
-
 function addGirl() {
   const input = document.getElementById("newGirl");
-  const name  = input.value.trim();
+  const name = input.value.trim();
   if (!name) return;
   if (!state.girls) state.girls = [];
   if (state.girls.includes(name)) { input.select(); return; }
-  state.girls.push(name);
-  input.value = "";
-  pushState();
-  render();
+  state.girls.push(name); input.value = "";
+  pushState(); render();
 }
-
 function openEditModal(name) {
   editTarget = name;
   document.getElementById("editInput").value = name;
   document.getElementById("editModal").classList.add("show");
   setTimeout(() => document.getElementById("editInput").focus(), 50);
 }
-
 function closeModal() {
   document.getElementById("editModal").classList.remove("show");
   editTarget = null;
 }
-
 function confirmEdit() {
   const newName = document.getElementById("editInput").value.trim();
   if (!newName || !editTarget) { closeModal(); return; }
@@ -637,55 +862,41 @@ function confirmEdit() {
   Object.values(state.tables || {}).forEach(t => {
     (t.girls || []).forEach(g => { if (g.name === old) g.name = newName; });
   });
-  closeModal();
-  pushState();
-  render();
+  closeModal(); pushState(); render();
 }
-
 function deleteGirl(name) {
   if (!confirm(`「${name}」を削除しますか？`)) return;
   state.girls = (state.girls || []).filter(g => g !== name);
   Object.values(state.tables || {}).forEach(t => {
     t.girls = (t.girls || []).filter(g => g.name !== name);
   });
-  pushState();
-  render();
+  pushState(); render();
 }
-
 function setType(tableId, index, type) {
   state.tables[tableId].girls[index].type = type;
-  pushState();
-  renderTables();
+  pushState(); renderTables();
 }
-
 function removeGirl(tableId, index) {
   state.tables[tableId].girls.splice(index, 1);
-  pushState();
-  renderTables();
+  pushState(); renderTables();
 }
-
 function restore(tableId, index) {
   const g = state.tables[tableId].girls[index];
   g.isGhost = false;
   if (g.frozenTime !== undefined) { g.time = g.frozenTime; delete g.frozenTime; }
-  pushState();
-  renderTables();
+  pushState(); renderTables();
 }
-
 function changeGuests(tableId, delta) {
   if (!state.tables[tableId]) return;
   state.tables[tableId].guests = Math.max(0, (state.tables[tableId].guests || 0) + delta);
-  pushState();
-  renderTables();
+  pushState(); renderTables();
 }
 
-// ── キーボード ──
 document.addEventListener("keydown", e => {
   if (e.key === "Escape") closeModal();
   if (e.key === "Enter" && document.getElementById("editModal").classList.contains("show")) confirmEdit();
 });
 
-// ── 前回のルームID復元 ──
 const lastRoom = localStorage.getItem("lastRoom");
 if (lastRoom) document.getElementById("roomInput").value = lastRoom;
 </script>
