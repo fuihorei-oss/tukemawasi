@@ -196,98 +196,85 @@
   /* ── 席のみ表示 ── */
   #tableOnlyView {
     display: none;
-    padding: 12px;
+    padding: 10px;
     overflow-y: auto;
     flex: 1;
+    width: 100%;
   }
 
-  /* 写真の配置:
-     右列: 1,2,3,4,5  左列: 7,8,9,10  6は5の左隣（下部横並び）
-     実装: 右列(1-4)と左列(7-10)を上部に並べ、下部に6と5を横並び
+  /* 配置（画像通り）:
+     左列: 7(小横長),8(小横長),9(中),10(大)
+     右列: 1(小),2(小),3(小),4(大), 下部に[6(小)][5(小)]横並び
   */
   .tov-layout {
     display: flex;
-    gap: 10px;
+    gap: 8px;
     align-items: flex-start;
-    height: 100%;
+    width: 100%;
   }
-  /* 左エリア: 7,8,9,10 + 下に6 */
   .tov-left {
     display: flex;
     flex-direction: column;
     gap: 8px;
     flex: 1;
   }
-  /* 右エリア: 1,2,3,4 + 下に5 */
   .tov-right {
     display: flex;
     flex-direction: column;
     gap: 8px;
-    flex: 1;
+    flex: 1.4;
   }
-  /* 下部の横並びエリア（6と5） */
   .tov-bottom-row {
     display: flex;
     gap: 8px;
-    align-items: flex-start;
+    align-items: stretch;
   }
-  /* 席カード（席のみ表示用） */
   .tov-card {
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: 10px;
-    padding: 10px;
+    padding: 8px 10px;
     transition: border-color 0.2s;
-    flex: 1;
   }
-  .tov-card.active { border-color: var(--accent); box-shadow: 0 0 12px rgba(201,168,76,0.15); }
+  .tov-card.active { border-color: var(--accent); box-shadow: 0 0 10px rgba(201,168,76,0.15); }
+  /* 小横長（7,8） */
+  .tov-card.sz-slim  { min-height: 50px; border-radius: 20px; }
+  /* 小（1,2,3） */
+  .tov-card.sz-small { min-height: 68px; }
+  /* 中（9） */
+  .tov-card.sz-mid   { min-height: 88px; }
+  /* 大（4,10） */
+  .tov-card.sz-large { min-height: 118px; }
+  /* 下部6（幅小さめ） */
+  .tov-card.sz-six   { flex: 0.55; min-height: 65px; }
+  /* 下部5 */
+  .tov-card.sz-five  { flex: 1; min-height: 65px; }
+
   .tov-card-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 8px;
+    margin-bottom: 5px;
   }
   .tov-num {
     font-family: 'Bebas Neue', sans-serif;
-    font-size: 20px;
+    font-size: 17px;
     letter-spacing: 1px;
     color: var(--accent);
     display: flex;
     align-items: center;
-    gap: 5px;
-  }
-  .tov-timer {
-    font-size: 12px;
-    font-weight: 700;
-    font-variant-numeric: tabular-nums;
-    color: var(--text-dim);
-  }
-  .tov-timer.running { color: var(--accent2); }
-  .tov-guests {
-    font-size: 11px;
-    color: var(--text-dim);
-    margin-bottom: 6px;
-  }
-  .tov-names {
-    display: flex;
-    flex-direction: column;
     gap: 4px;
   }
-  .tov-name-chip {
-    font-size: 12px;
-    font-weight: 600;
-    padding: 4px 8px;
-    border-radius: 5px;
-    display: flex;
-    align-items: center;
-    gap: 5px;
-  }
+  .tov-timer { font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--text-dim); }
+  .tov-timer.running { color: var(--accent2); }
+  .tov-guests { font-size: 10px; color: var(--text-dim); margin-bottom: 4px; }
+  .tov-names { display: flex; flex-direction: column; gap: 3px; }
+  .tov-name-chip { font-size: 12px; font-weight: 700; padding: 3px 7px; border-radius: 5px; }
   .tov-name-chip.nomination { background: rgba(224,90,122,0.2); color: var(--nomination); }
   .tov-name-chip.floor-nom  { background: rgba(168,85,247,0.2); color: var(--floor); }
   .tov-name-chip.help       { background: rgba(74,158,255,0.15); color: var(--help); }
   .tov-name-chip.leave      { background: rgba(100,100,120,0.15); color: var(--leave); }
-  .tov-name-chip.ghost      { opacity: 0.4; }
-  .tov-empty { font-size: 11px; color: var(--text-dim); text-align: center; padding: 6px 0; }
+  .tov-empty { font-size: 10px; color: var(--text-dim); text-align: center; padding: 4px 0; }
 
   /* ── キャストのみ表示 ── */
   #castOnlyView {
@@ -682,42 +669,46 @@ function buildCard(i) {
 }
 
 // ── 席のみ表示 ──
-// 配置: 右列=1,2,3,4 + 下に5  左列=7,8,9,10 + 下に6（5の左隣）
+// 左列: 7(slim),8(slim),9(mid),10(large)
+// 右列: 1(small),2(small),3(small),4(large), 下部[6(six)][5(five)]
 function renderTableOnly() {
   const layout = document.getElementById("tovLayout");
   if (!layout) return;
   layout.innerHTML = "";
 
-  // 左エリア（7,8,9,10 + 下にスペーサー）
+  // 左列
   const leftArea = document.createElement("div");
   leftArea.className = "tov-left";
-  [7,8,9,10].forEach(i => leftArea.appendChild(buildTovCard(i)));
-  // 左エリア下部に6を配置（右エリアの5に対応）
-  const leftBottom = document.createElement("div");
-  leftBottom.className = "tov-bottom-row";
-  leftBottom.appendChild(buildTovCard(6));
-  leftArea.appendChild(leftBottom);
+  leftArea.appendChild(buildTovCard(7, "sz-slim"));
+  leftArea.appendChild(buildTovCard(8, "sz-slim"));
+  leftArea.appendChild(buildTovCard(9, "sz-mid"));
+  leftArea.appendChild(buildTovCard(10, "sz-large"));
 
-  // 右エリア（1,2,3,4 + 下に5）
+  // 右列
   const rightArea = document.createElement("div");
   rightArea.className = "tov-right";
-  [1,2,3,4].forEach(i => rightArea.appendChild(buildTovCard(i)));
-  const rightBottom = document.createElement("div");
-  rightBottom.className = "tov-bottom-row";
-  rightBottom.appendChild(buildTovCard(5));
-  rightArea.appendChild(rightBottom);
+  rightArea.appendChild(buildTovCard(1, "sz-small"));
+  rightArea.appendChild(buildTovCard(2, "sz-small"));
+  rightArea.appendChild(buildTovCard(3, "sz-small"));
+  rightArea.appendChild(buildTovCard(4, "sz-large"));
+  // 下部: 6と5横並び
+  const bottomRow = document.createElement("div");
+  bottomRow.className = "tov-bottom-row";
+  bottomRow.appendChild(buildTovCard(6, "sz-six"));
+  bottomRow.appendChild(buildTovCard(5, "sz-five"));
+  rightArea.appendChild(bottomRow);
 
   layout.appendChild(leftArea);
   layout.appendChild(rightArea);
 }
 
-function buildTovCard(i) {
+function buildTovCard(i, sizeClass) {
   if (!state.tables) state.tables = {};
   if (!state.tables[i]) state.tables[i] = { girls: [], elapsed: 0, active: false };
   const tbl = state.tables[i];
   const elapsed = getTableElapsed(tbl);
   const card = document.createElement("div");
-  card.className = "tov-card" + (tbl.active ? " active" : "");
+  card.className = "tov-card " + (sizeClass || "") + (tbl.active ? " active" : "");
 
   const guests = tbl.guests || 0;
   let namesHtml = "";
