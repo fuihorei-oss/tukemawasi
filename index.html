@@ -559,10 +559,10 @@ function getTypeClass(type) {
 function setViewMode(mode) {
   currentMode = mode;
   ["all","tables","cast"].forEach(m => document.getElementById("vm_" + m).classList.toggle("active", m === mode));
-  document.getElementById("sidebar").style.display        = mode === "all" ? "" : "none";
-  document.getElementById("mainArea").style.display       = mode === "all" ? "" : "none";
-  document.getElementById("tableOnlyView").style.display  = mode === "tables" ? "" : "none";
-  document.getElementById("castOnlyView").style.display   = mode === "cast" ? "" : "none";
+  document.getElementById("sidebar").style.display        = mode === "all" ? "flex" : "none";
+  document.getElementById("mainArea").style.display       = mode === "all" ? "block" : "none";
+  document.getElementById("tableOnlyView").style.display  = mode === "tables" ? "block" : "none";
+  document.getElementById("castOnlyView").style.display   = mode === "cast" ? "block" : "none";
   render();
 }
 
