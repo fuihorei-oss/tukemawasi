@@ -4,24 +4,505 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>席管理システム</title>
-
-<!-- PWA manifest -->
 <link rel="manifest" href="manifest.json">
-
-<!-- iPhone ホーム画面追加用 -->
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="席管理">
-
-<!-- テーマカラー -->
 <meta name="theme-color" content="#0a0a0f">
-
-<!-- アイコン（apple-touch-icon が iPhone では最優先） -->
 <link rel="apple-touch-icon" sizes="180x180" href="icon-180.png">
-<link rel="apple-touch-icon" sizes="152x152" href="icon-152.png">
-<link rel="apple-touch-icon" sizes="120x120" href="icon-120.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&family=Bebas+Neue&display=swap" rel="stylesheet">
+
+<!-- Firebase -->
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getDatabase, ref, onValue, set, update } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+
+// ============================================================
+// ★ ここにFirebaseの設定を貼り付けてください ★
+// Firebase Console → プロジェクト設定 → マイアプリ → firebaseConfig
+// ============================================================
+const firebaseConfig = {
+  apiKey: "YOUR_API_KEY",
+  authDomain: "YOUR_PROJECT.firebaseapp.com",
+  databaseURL: "https://YOUR_PROJECT-default-rtdb.firebaseio.com",
+  projectId: "YOUR_PROJECT",
+  storageBucket: "YOUR_PROJECT.appspot.com",
+  messagingSenderId: "YOUR_SENDER_ID",
+  appId: "YOUR_APP_ID"
+};
+
+const app = initializeApp(firebaseConfig);
+const db  = getDatabase(app);
+
+// ============================================================
+// STATE
+// ============================================================
+let roomId   = null;
+let state    = { girls: [], tables: {} };
+let viewMode = "all"; // "all" | "tables" | "cast"
+let editTarget = null;
+let localTimerStartedAt = {}; // tableId -> Date.now() when started locally
+let suppressRemote = false;   // 自分の書き込み中はリモート更新を無視
+
+// ============================================================
+// FIREBASE HELPERS
+// ============================================================
+function dbRef(path) {
+  return ref(db, `rooms/${roomId}/${path}`);
+}
+
+// 全stateをFirebaseに書き込む（操作系）
+function pushState() {
+  if (!roomId) return;
+  suppressRemote = true;
+  set(dbRef("state"), JSON.stringify(state)).finally(() => {
+    setTimeout(() => { suppressRemote = false; }, 500);
+  });
+}
+
+// タイマーのみ軽量更新（毎秒の書き込みは不要 → 起動時刻を保存する方式）
+// active=trueにしたとき startedAt を記録、stopしたとき elapsed を保存
+function pushTableTimer(tableId) {
+  if (!roomId) return;
+  const t = state.tables[tableId];
+  suppressRemote = true;
+  update(dbRef(`state`), {}).finally(() => {}); // no-op for throttle
+  set(dbRef("state"), JSON.stringify(state)).finally(() => {
+    setTimeout(() => { suppressRemote = false; }, 500);
+  });
+}
+
+// Firebaseからリアルタイム受信
+function startListening() {
+  onValue(dbRef("state"), (snap) => {
+    if (suppressRemote) return;
+    const raw = snap.val();
+    if (!raw) return;
+    try {
+      const remote = JSON.parse(raw);
+      state = remote;
+      render();
+    } catch(e) {}
+  });
+}
+
+// ============================================================
+// LOGIN SCREEN
+// ============================================================
+function showLogin() {
+  document.getElementById("loginScreen").style.display = "flex";
+  document.getElementById("appScreen").style.display   = "none";
+}
+
+function showApp() {
+  document.getElementById("loginScreen").style.display = "none";
+  document.getElementById("appScreen").style.display   = "grid";
+  document.getElementById("roomLabel").textContent = `ROOM: ${roomId}`;
+  startListening();
+  render();
+}
+
+window.doLogin = function() {
+  const id = document.getElementById("roomInput").value.trim();
+  if (!id) return;
+  roomId = id;
+  localStorage.setItem("lastRoom", id);
+  showApp();
+};
+
+window.doLogout = function() {
+  roomId = null;
+  state  = { girls: [], tables: {} };
+  showLogin();
+};
+
+// 前回のルームIDを復元
+const lastRoom = localStorage.getItem("lastRoom");
+if (lastRoom) {
+  document.getElementById("roomInput").value = lastRoom;
+}
+
+// ============================================================
+// UTILS
+// ============================================================
+function formatTime(ms) {
+  let s   = Math.floor(ms / 1000);
+  let h   = Math.floor(s / 3600);
+  let m   = Math.floor((s % 3600) / 60);
+  let sec = s % 60;
+  if (h > 0) return `${h}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`;
+  return `${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`;
+}
+
+// アクティブなテーブルの経過時間をリアルタイム計算（startedAtベース）
+function getTableElapsed(tbl) {
+  if (!tbl.active) return tbl.elapsed || 0;
+  const startedAt = tbl.startedAt || Date.now();
+  return (tbl.elapsed || 0) + (Date.now() - startedAt);
+}
+
+function getTypeClass(type) {
+  if (type === "指名")    return "nomination";
+  if (type === "場内指名") return "floor-nom";
+  if (type === "一時離席") return "leave";
+  return "help";
+}
+
+function updateClock() {
+  const el = document.getElementById("clock");
+  if (el) el.textContent = new Date().toLocaleTimeString('ja-JP');
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+// ============================================================
+// VIEW MODE
+// ============================================================
+window.setViewMode = function(mode) {
+  viewMode = mode;
+  ["all","tables","cast"].forEach(m => {
+    document.getElementById("vm_" + m)?.classList.toggle("active", m === mode);
+  });
+  document.getElementById("sidebar").style.display  = (mode === "tables") ? "none" : "";
+  document.getElementById("mainArea").style.display = (mode === "cast")   ? "none" : "";
+  if (mode === "tables") {
+    document.getElementById("appScreen").style.gridTemplateColumns = "1fr";
+  } else if (mode === "cast") {
+    document.getElementById("appScreen").style.gridTemplateColumns = "220px";
+  } else {
+    document.getElementById("appScreen").style.gridTemplateColumns = "220px 1fr";
+  }
+};
+
+// ============================================================
+// PAGE (席1-5 / 席6-10)
+// ============================================================
+let currentPage = 1;
+
+window.switchPage = function(page) {
+  currentPage = page;
+  ["1","2"].forEach(p => {
+    document.getElementById("sideTab"+p)?.classList.toggle("active", Number(p) === page);
+    document.getElementById("mainTab"+p)?.classList.toggle("active", Number(p) === page);
+  });
+  render();
+};
+
+function pageRange() {
+  return currentPage === 1 ? [1,2,3,4,5] : [6,7,8,9,10];
+}
+
+// ============================================================
+// RENDER - CAST SIDEBAR
+// ============================================================
+function renderGirls() {
+  const g = document.getElementById("girls");
+  if (!g) return;
+  g.innerHTML = "";
+  document.getElementById("castCount").textContent = (state.girls || []).length;
+
+  const range = pageRange();
+  (state.girls || []).forEach(name => {
+    const div = document.createElement("div");
+    div.className = "cast-item";
+    const tableBtns = range.map(i =>
+      `<button onclick="assignToTable('${name}',${i})">席${i}</button>`
+    ).join("");
+    div.innerHTML = `
+      <div class="cast-name"><span class="cast-dot"></span><span>${name}</span></div>
+      <div class="cast-table-btns">${tableBtns}</div>
+      <div class="cast-actions">
+        <button onclick="openEditModal('${name}')">✎ 編集</button>
+        <button onclick="deleteGirl('${name}')" style="color:#e05a7a">✕ 削除</button>
+      </div>`;
+    g.appendChild(div);
+  });
+}
+
+// ============================================================
+// RENDER - TABLE LAYOUT (L字型)
+// 画像の配置:
+//   左列: 席1,2,3,4  (上から下)
+//   右列: 席5,6,7,8,9,10 (上から下)
+//   ただし席番号はページで分かれているので
+//   ページ1(1-5): 左に1,2,3,4  右に5
+//   ページ2(6-10): 左に6,7,8,9 右に10
+//   → 全体表示: 左列1-4, 右列5-10
+// ============================================================
+function renderTables() {
+  const container = document.getElementById("tables");
+  if (!container) return;
+  container.innerHTML = "";
+
+  // L字配置: 左列・右列
+  const leftTables  = currentPage === 1 ? [1,2,3,4] : [6,7,8,9];
+  const rightTables = currentPage === 1 ? [5]        : [10];
+
+  const wrapper = document.createElement("div");
+  wrapper.className = "tables-layout";
+
+  const leftCol  = document.createElement("div");
+  leftCol.className = "table-col";
+  const rightCol = document.createElement("div");
+  rightCol.className = "table-col";
+
+  leftTables.forEach(i  => leftCol.appendChild(buildTableCard(i)));
+  rightTables.forEach(i => rightCol.appendChild(buildTableCard(i)));
+
+  wrapper.appendChild(leftCol);
+  wrapper.appendChild(rightCol);
+  container.appendChild(wrapper);
+}
+
+function buildTableCard(i) {
+  if (!state.tables) state.tables = {};
+  if (!state.tables[i]) state.tables[i] = { girls: [], elapsed: 0, active: false };
+
+  const tbl = state.tables[i];
+  const elapsed = getTableElapsed(tbl);
+  const card = document.createElement("div");
+  card.className = "table-card" + (tbl.active ? " active" : "");
+
+  let girlsHtml = "";
+  if (!tbl.girls || tbl.girls.length === 0) {
+    girlsHtml = `<div class="empty-table">— 空席 —</div>`;
+  } else {
+    tbl.girls.forEach((g, idx) => {
+      const cls  = getTypeClass(g.type);
+      const fade = g.isGhost ? " fade" : "";
+      const gTime = g.isGhost
+        ? formatTime(g.frozenTime || g.time || 0)
+        : formatTime(g.time || 0);
+
+      girlsHtml += `
+        <div class="assigned ${cls}${fade}">
+          <div class="assigned-top">
+            <div class="assigned-name">
+              <span>${g.name}</span>
+              <span class="type-badge">${g.type}</span>
+              ${g.isGhost ? '<span class="ghost-label">移動中</span>' : ''}
+            </div>
+            <div style="display:flex;align-items:center;gap:4px">
+              <span class="assigned-time">${g.isGhost ? '⏸ ' : ''}${gTime}</span>
+              <button class="remove-btn" onclick="removeGirl(${i},${idx})">✕</button>
+            </div>
+          </div>
+          ${g.isGhost ? `
+            <div class="assigned-btns">
+              <button class="restore-btn" onclick="restore(${i},${idx})">↩ 戻す</button>
+            </div>` : `
+            <div class="assigned-btns">
+              <button class="type-btn ${g.type==='指名'?'active-nomination':''}"    onclick="setType(${i},${idx},'指名')">指名</button>
+              <button class="type-btn ${g.type==='場内指名'?'active-floor':''}"    onclick="setType(${i},${idx},'場内指名')">場内</button>
+              <button class="type-btn ${g.type==='ヘルプ'?'active-help':''}"       onclick="setType(${i},${idx},'ヘルプ')">ヘルプ</button>
+              <button class="type-btn ${g.type==='一時離席'?'active-leave':''}"    onclick="setType(${i},${idx},'一時離席')">離席</button>
+            </div>`}
+        </div>`;
+    });
+  }
+
+  const guests = tbl.guests || 0;
+  card.innerHTML = `
+    <div class="table-header">
+      <div class="table-num">${tbl.active ? '<span class="active-pulse"></span>' : ''}席 ${i}</div>
+      <span class="table-timer ${tbl.active ? 'running' : ''}" id="timer_${i}">${formatTime(elapsed)}</span>
+    </div>
+    <div class="table-controls">
+      <button class="btn-timer ${tbl.active ? 'btn-stop' : 'btn-start'}" onclick="toggleTimer(${i})">
+        ${tbl.active ? '■ 停止' : '▶ 開始'}
+      </button>
+      <button class="btn-timer btn-reset" onclick="resetTable(${i})">↺ リセット</button>
+    </div>
+    <div class="guest-row">
+      <span class="guest-label">👤 客数</span>
+      <div class="guest-counter">
+        <button class="guest-btn" onclick="changeGuests(${i},-1)">−</button>
+        <span class="guest-num">${guests}</span>
+        <button class="guest-btn" onclick="changeGuests(${i},1)">＋</button>
+      </div>
+    </div>
+    <div class="table-girls">${girlsHtml}</div>`;
+
+  return card;
+}
+
+function render() {
+  renderGirls();
+  renderTables();
+}
+
+// ============================================================
+// TIMER (startedAt方式 – Firebaseへの毎秒書き込み不要)
+// ============================================================
+window.toggleTimer = function(id) {
+  if (!state.tables[id]) state.tables[id] = { girls: [], elapsed: 0, active: false };
+  const t = state.tables[id];
+
+  if (t.active) {
+    // 停止: 経過時間を確定して保存
+    t.elapsed   = (t.elapsed || 0) + (Date.now() - (t.startedAt || Date.now()));
+    t.active    = false;
+    t.startedAt = null;
+  } else {
+    // 開始: 起動時刻を記録
+    t.startedAt = Date.now();
+    t.active    = true;
+  }
+  pushState();
+  renderTables();
+};
+
+window.resetTable = function(id) {
+  state.tables[id] = { girls: [], elapsed: 0, active: false, guests: 0 };
+  pushState();
+  renderTables();
+};
+
+// アクティブなタイマーをローカルで毎秒更新（Firebaseへは書き込まない）
+setInterval(() => {
+  let anyActive = false;
+  Object.entries(state.tables || {}).forEach(([id, t]) => {
+    if (!t.active) return;
+    anyActive = true;
+    const elapsed = getTableElapsed(t);
+    const el = document.getElementById(`timer_${id}`);
+    if (el) el.textContent = formatTime(elapsed);
+    // キャストの個別タイムもローカル加算
+    (t.girls || []).forEach(g => {
+      if (!g.isGhost && g.type !== "一時離席") {
+        g.time = (g.time || 0) + 1000;
+      }
+    });
+  });
+  // 10秒ごとにキャストタイムをFirebaseへ同期（無駄な書き込みを削減）
+}, 1000);
+
+// キャストタイムを10秒ごとに同期
+setInterval(() => {
+  if (!roomId) return;
+  const anyActive = Object.values(state.tables || {}).some(t => t.active);
+  if (anyActive) pushState();
+}, 10000);
+
+// ============================================================
+// CAST OPERATIONS
+// ============================================================
+window.assignToTable = function(name, tableId) {
+  if (!state.tables) state.tables = {};
+  if (!state.tables[tableId]) state.tables[tableId] = { girls: [], elapsed: 0, active: false };
+  const target = state.tables[tableId];
+  if ((target.girls || []).some(g => g.name === name && !g.isGhost)) return;
+
+  Object.entries(state.tables).forEach(([tid, tbl]) => {
+    if (Number(tid) === tableId) return;
+    (tbl.girls || []).forEach(g => {
+      if (g.name === name && !g.isGhost) {
+        if (g.type === "ヘルプ") {
+          g._remove = true;
+        } else if (g.type === "指名" || g.type === "場内指名") {
+          g.isGhost    = true;
+          g.frozenTime = g.time || 0;
+        }
+      }
+    });
+    tbl.girls = (tbl.girls || []).filter(g => !g._remove);
+  });
+
+  target.girls.push({ name, type: "ヘルプ", time: 0, isGhost: false });
+  pushState();
+  renderTables();
+};
+
+window.addGirl = function() {
+  const input = document.getElementById("newGirl");
+  const name  = input.value.trim();
+  if (!name) return;
+  if (!state.girls) state.girls = [];
+  if (state.girls.includes(name)) { input.select(); return; }
+  state.girls.push(name);
+  input.value = "";
+  pushState();
+  render();
+};
+
+window.openEditModal = function(name) {
+  editTarget = name;
+  document.getElementById("editInput").value = name;
+  document.getElementById("editModal").classList.add("show");
+  setTimeout(() => document.getElementById("editInput").focus(), 50);
+};
+
+window.closeModal = function() {
+  document.getElementById("editModal").classList.remove("show");
+  editTarget = null;
+};
+
+window.confirmEdit = function() {
+  const newName = document.getElementById("editInput").value.trim();
+  if (!newName || !editTarget) { closeModal(); return; }
+  const old = editTarget;
+  state.girls = (state.girls || []).map(g => g === old ? newName : g);
+  Object.values(state.tables || {}).forEach(t => {
+    (t.girls || []).forEach(g => { if (g.name === old) g.name = newName; });
+  });
+  closeModal();
+  pushState();
+  render();
+};
+
+window.deleteGirl = function(name) {
+  if (!confirm(`「${name}」を削除しますか？`)) return;
+  state.girls = (state.girls || []).filter(g => g !== name);
+  Object.values(state.tables || {}).forEach(t => {
+    t.girls = (t.girls || []).filter(g => g.name !== name);
+  });
+  pushState();
+  render();
+};
+
+window.setType = function(tableId, index, type) {
+  state.tables[tableId].girls[index].type = type;
+  pushState();
+  renderTables();
+};
+
+window.removeGirl = function(tableId, index) {
+  state.tables[tableId].girls.splice(index, 1);
+  pushState();
+  renderTables();
+};
+
+window.restore = function(tableId, index) {
+  const g = state.tables[tableId].girls[index];
+  g.isGhost = false;
+  if (g.frozenTime !== undefined) { g.time = g.frozenTime; delete g.frozenTime; }
+  pushState();
+  renderTables();
+};
+
+window.changeGuests = function(tableId, delta) {
+  if (!state.tables[tableId]) return;
+  state.tables[tableId].guests = Math.max(0, (state.tables[tableId].guests || 0) + delta);
+  pushState();
+  renderTables();
+};
+
+// ============================================================
+// KEYBOARD
+// ============================================================
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape") closeModal();
+  if (e.key === "Enter" && document.getElementById("editModal")?.classList.contains("show")) confirmEdit();
+  if (e.key === "Enter" && document.getElementById("loginScreen")?.style.display !== "none") doLogin();
+});
+
+// ============================================================
+// BOOT
+// ============================================================
+showLogin();
+</script>
+
 <style>
   :root {
     --bg: #0a0a0f;
@@ -48,21 +529,110 @@
     font-family: 'Noto Sans JP', sans-serif;
     font-size: 13px;
     min-height: 100vh;
-    background-image: radial-gradient(ellipse 80% 50% at 50% -20%, rgba(201,168,76,0.08) 0%, transparent 60%);
-    /* iPhone セーフエリア対応 */
     padding-top: env(safe-area-inset-top);
     padding-bottom: env(safe-area-inset-bottom);
+    background-image: radial-gradient(ellipse 80% 50% at 50% -20%, rgba(201,168,76,0.08) 0%, transparent 60%);
   }
 
-  /* ── HEADER (スクロールで流れる) ── */
-  header {
+  /* ── LOGIN ── */
+  #loginScreen {
+    position: fixed; inset: 0;
+    background: var(--bg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 999;
+  }
+
+  .login-box {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 36px 32px;
+    width: 300px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    align-items: center;
+  }
+
+  .login-logo {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 28px;
+    letter-spacing: 4px;
+    color: var(--accent);
+    text-shadow: 0 0 20px rgba(201,168,76,0.4);
+    margin-bottom: 4px;
+  }
+
+  .login-label {
+    font-size: 11px;
+    color: var(--text-dim);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    align-self: flex-start;
+  }
+
+  .login-input {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font-family: inherit;
+    font-size: 16px;
+    padding: 10px 14px;
+    outline: none;
+    transition: border-color 0.2s;
+    text-align: center;
+    letter-spacing: 2px;
+  }
+
+  .login-input:focus { border-color: var(--accent); }
+
+  .login-btn {
+    width: 100%;
+    background: var(--accent);
+    border: none;
+    border-radius: 8px;
+    color: #000;
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 700;
+    padding: 12px;
+    cursor: pointer;
+    letter-spacing: 1px;
+    transition: opacity 0.15s;
+  }
+
+  .login-btn:hover { opacity: 0.85; }
+
+  .login-note {
+    font-size: 10px;
+    color: var(--text-dim);
+    text-align: center;
+    line-height: 1.6;
+  }
+
+  /* ── APP LAYOUT ── */
+  #appScreen {
+    display: none;
+    grid-template-columns: 220px 1fr;
+    min-height: 100vh;
+  }
+
+  /* ── HEADER ── */
+  .app-header {
+    grid-column: 1 / -1;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 12px 16px;
+    padding: 10px 16px;
     border-bottom: 1px solid var(--border);
     background: rgba(19,19,28,0.98);
-    backdrop-filter: blur(8px);
+    gap: 10px;
+    flex-wrap: wrap;
   }
 
   .logo {
@@ -73,21 +643,62 @@
     text-shadow: 0 0 20px rgba(201,168,76,0.4);
   }
 
-  .header-time {
-    font-size: 12px;
+  .header-center {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+  }
+
+  .vm-btn {
+    background: var(--surface2);
+    border: 1px solid var(--border);
     color: var(--text-dim);
+    font-size: 11px;
+    font-weight: 600;
+    padding: 5px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-family: inherit;
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+
+  .vm-btn.active { background: var(--accent); border-color: var(--accent); color: #000; }
+
+  .header-right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .room-badge {
+    font-size: 10px;
     letter-spacing: 1px;
-    font-variant-numeric: tabular-nums;
+    color: var(--accent);
+    background: rgba(201,168,76,0.1);
+    border: 1px solid rgba(201,168,76,0.3);
+    border-radius: 5px;
+    padding: 3px 8px;
   }
 
-  /* ── LAYOUT ── */
-  .layout {
-    display: grid;
-    grid-template-columns: 200px 1fr;
+  .header-time { font-size: 12px; color: var(--text-dim); font-variant-numeric: tabular-nums; }
+
+  .logout-btn {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    font-size: 11px;
+    padding: 4px 10px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-family: inherit;
+    transition: all 0.15s;
   }
 
-  /* ── SIDEBAR (sticky) ── */
-  .sidebar {
+  .logout-btn:hover { border-color: var(--red); color: var(--red); }
+
+  /* ── SIDEBAR ── */
+  #sidebar {
     background: var(--surface);
     border-right: 1px solid var(--border);
     display: flex;
@@ -107,12 +718,7 @@
     flex-shrink: 0;
   }
 
-  .sidebar-title {
-    font-size: 10px;
-    letter-spacing: 2px;
-    text-transform: uppercase;
-    color: var(--text-dim);
-  }
+  .sidebar-title { font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: var(--text-dim); }
 
   .cast-count {
     background: var(--accent);
@@ -123,12 +729,7 @@
     padding: 1px 7px;
   }
 
-  /* サイドバー内ページタブ */
-  .page-tabs {
-    display: flex;
-    border-bottom: 1px solid var(--border);
-    flex-shrink: 0;
-  }
+  .page-tabs { display: flex; border-bottom: 1px solid var(--border); flex-shrink: 0; }
 
   .page-tab {
     flex: 1;
@@ -141,23 +742,13 @@
     border: none;
     background: transparent;
     font-family: inherit;
-    letter-spacing: 0.5px;
     border-bottom: 2px solid transparent;
     transition: all 0.15s;
   }
 
-  .page-tab.active {
-    color: var(--accent);
-    border-bottom-color: var(--accent);
-    background: rgba(201,168,76,0.05);
-  }
+  .page-tab.active { color: var(--accent); border-bottom-color: var(--accent); background: rgba(201,168,76,0.05); }
 
-  .cast-list {
-    flex: 1;
-    overflow-y: auto;
-    padding: 8px;
-  }
-
+  .cast-list { flex: 1; overflow-y: auto; padding: 8px; }
   .cast-list::-webkit-scrollbar { width: 3px; }
   .cast-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
 
@@ -172,28 +763,10 @@
 
   .cast-item:hover { border-color: var(--accent); }
 
-  .cast-name {
-    font-weight: 600;
-    font-size: 13px;
-    margin-bottom: 8px;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-  }
+  .cast-name { font-weight: 600; font-size: 13px; margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
+  .cast-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); flex-shrink: 0; }
 
-  .cast-dot {
-    width: 6px; height: 6px;
-    border-radius: 50%;
-    background: var(--accent);
-    flex-shrink: 0;
-  }
-
-  .cast-table-btns {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 4px;
-    margin-bottom: 7px;
-  }
+  .cast-table-btns { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 7px; }
 
   .cast-table-btns button {
     background: transparent;
@@ -210,16 +783,9 @@
     text-align: center;
   }
 
-  .cast-table-btns button:hover {
-    border-color: var(--accent);
-    color: var(--accent);
-    background: rgba(201,168,76,0.08);
-  }
+  .cast-table-btns button:hover { border-color: var(--accent); color: var(--accent); background: rgba(201,168,76,0.08); }
 
-  .cast-actions {
-    display: flex;
-    gap: 4px;
-  }
+  .cast-actions { display: flex; gap: 4px; }
 
   .cast-actions button {
     background: var(--border);
@@ -236,13 +802,7 @@
 
   .cast-actions button:hover { background: var(--accent); color: #000; }
 
-  .add-cast {
-    padding: 10px;
-    border-top: 1px solid var(--border);
-    display: flex;
-    gap: 6px;
-    flex-shrink: 0;
-  }
+  .add-cast { padding: 10px; border-top: 1px solid var(--border); display: flex; gap: 6px; flex-shrink: 0; }
 
   .add-cast input {
     flex: 1;
@@ -276,15 +836,9 @@
   .btn-add:hover { opacity: 0.8; }
 
   /* ── MAIN ── */
-  .main {
-    padding: 14px;
-  }
+  #mainArea { padding: 12px; overflow-y: auto; }
 
-  .main-tabs {
-    display: flex;
-    gap: 8px;
-    margin-bottom: 14px;
-  }
+  .main-tabs { display: flex; gap: 8px; margin-bottom: 12px; }
 
   .main-tab {
     background: var(--surface2);
@@ -292,7 +846,7 @@
     color: var(--text-dim);
     font-size: 12px;
     font-weight: 700;
-    padding: 8px 22px;
+    padding: 7px 20px;
     border-radius: 7px;
     cursor: pointer;
     font-family: inherit;
@@ -300,16 +854,20 @@
     transition: all 0.15s;
   }
 
-  .main-tab.active {
-    background: var(--accent);
-    border-color: var(--accent);
-    color: #000;
+  .main-tab.active { background: var(--accent); border-color: var(--accent); color: #000; }
+
+  /* ── L字テーブルレイアウト ── */
+  .tables-layout {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
   }
 
-  .tables-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  .table-col {
+    display: flex;
+    flex-direction: column;
     gap: 12px;
+    flex: 1;
   }
 
   /* ── TABLE CARD ── */
@@ -321,16 +879,13 @@
     transition: border-color 0.2s;
   }
 
-  .table-card.active {
-    border-color: var(--accent);
-    box-shadow: 0 0 16px rgba(201,168,76,0.12);
-  }
+  .table-card.active { border-color: var(--accent); box-shadow: 0 0 16px rgba(201,168,76,0.12); }
 
   .table-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 9px 12px 8px;
+    padding: 8px 12px;
     border-bottom: 1px solid var(--border);
     background: var(--surface2);
   }
@@ -345,25 +900,10 @@
     gap: 6px;
   }
 
-  .table-timer {
-    font-size: 13px;
-    font-weight: 700;
-    letter-spacing: 1px;
-    color: var(--text);
-    font-variant-numeric: tabular-nums;
-  }
+  .table-timer { font-size: 13px; font-weight: 700; letter-spacing: 1px; color: var(--text); font-variant-numeric: tabular-nums; }
+  .table-timer.running { color: var(--accent2); text-shadow: 0 0 10px rgba(232,201,122,0.3); }
 
-  .table-timer.running {
-    color: var(--accent2);
-    text-shadow: 0 0 10px rgba(232,201,122,0.3);
-  }
-
-  .table-controls {
-    display: flex;
-    gap: 5px;
-    padding: 7px 10px;
-    border-bottom: 1px solid var(--border);
-  }
+  .table-controls { display: flex; gap: 5px; padding: 6px 10px; border-bottom: 1px solid var(--border); }
 
   .btn-timer {
     flex: 1;
@@ -374,18 +914,12 @@
     padding: 6px 0;
     cursor: pointer;
     font-family: inherit;
-    letter-spacing: 0.5px;
     transition: all 0.15s;
   }
 
   .btn-start { background: var(--green); color: #000; }
   .btn-stop  { background: var(--red);   color: #fff; }
-  .btn-reset {
-    background: var(--surface2);
-    border: 1px solid var(--border) !important;
-    color: var(--text-dim);
-    flex: 0.6;
-  }
+  .btn-reset { background: var(--surface2); border: 1px solid var(--border) !important; color: var(--text-dim); flex: 0.6; }
   .btn-reset:hover { border-color: var(--text-dim) !important; color: var(--text); }
 
   .guest-row {
@@ -398,17 +932,8 @@
   }
 
   .guest-label { font-size: 11px; color: var(--text-dim); }
-
   .guest-counter { display: flex; align-items: center; gap: 8px; }
-
-  .guest-num {
-    font-size: 17px;
-    font-weight: 700;
-    font-variant-numeric: tabular-nums;
-    color: var(--accent);
-    min-width: 26px;
-    text-align: center;
-  }
+  .guest-num { font-size: 17px; font-weight: 700; color: var(--accent); min-width: 26px; text-align: center; font-variant-numeric: tabular-nums; }
 
   .guest-btn {
     background: var(--surface2);
@@ -427,21 +952,8 @@
 
   .guest-btn:hover { border-color: var(--accent); color: var(--accent); }
 
-  .table-girls {
-    padding: 7px;
-    min-height: 36px;
-    display: flex;
-    flex-direction: column;
-    gap: 5px;
-  }
-
-  .empty-table {
-    color: var(--text-dim);
-    font-size: 11px;
-    text-align: center;
-    padding: 8px 0;
-    letter-spacing: 1px;
-  }
+  .table-girls { padding: 7px; min-height: 36px; display: flex; flex-direction: column; gap: 5px; }
+  .empty-table { color: var(--text-dim); font-size: 11px; text-align: center; padding: 8px 0; letter-spacing: 1px; }
 
   /* ── ASSIGNED ── */
   .assigned {
@@ -455,7 +967,6 @@
   }
 
   .assigned.fade { opacity: 0.4; }
-
   .assigned.nomination { background: rgba(224,90,122,0.12); border-color: rgba(224,90,122,0.3); }
   .assigned.floor-nom  { background: rgba(168,85,247,0.12); border-color: rgba(168,85,247,0.3); }
   .assigned.help       { background: rgba(74,158,255,0.10); border-color: rgba(74,158,255,0.25); }
@@ -466,44 +977,15 @@
   .help       .type-badge { background: var(--help);        color: #fff; }
   .leave      .type-badge { background: var(--leave);       color: #fff; }
 
-  .assigned-top {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 6px;
-  }
+  .assigned-top { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
 
-  .assigned-name {
-    font-weight: 500;
-    font-size: 12px;
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    flex-wrap: wrap;
-  }
+  .assigned-name { font-weight: 500; font-size: 12px; display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
 
-  .type-badge {
-    font-size: 9px;
-    padding: 1px 5px;
-    border-radius: 3px;
-    font-weight: 700;
-    letter-spacing: 0.5px;
-  }
+  .type-badge { font-size: 9px; padding: 1px 5px; border-radius: 3px; font-weight: 700; letter-spacing: 0.5px; }
 
-  .ghost-label {
-    font-size: 9px;
-    padding: 1px 5px;
-    border-radius: 3px;
-    background: rgba(136,136,153,0.25);
-    color: var(--text-dim);
-  }
+  .ghost-label { font-size: 9px; padding: 1px 5px; border-radius: 3px; background: rgba(136,136,153,0.25); color: var(--text-dim); }
 
-  .assigned-time {
-    font-size: 11px;
-    font-variant-numeric: tabular-nums;
-    color: var(--text-dim);
-    white-space: nowrap;
-  }
+  .assigned-time { font-size: 11px; font-variant-numeric: tabular-nums; color: var(--text-dim); white-space: nowrap; }
 
   .assigned-btns { display: flex; gap: 3px; }
 
@@ -527,143 +1009,82 @@
   .type-btn.active-help       { background: var(--help);        border-color: var(--help);        color: #fff; }
   .type-btn.active-leave      { background: var(--leave);       border-color: var(--leave);       color: #fff; }
 
-  .remove-btn {
-    border: none;
-    background: transparent;
-    color: #555;
-    font-size: 14px;
-    cursor: pointer;
-    padding: 0 2px;
-    line-height: 1;
-    transition: color 0.15s;
-  }
-
+  .remove-btn { border: none; background: transparent; color: #555; font-size: 14px; cursor: pointer; padding: 0 2px; line-height: 1; transition: color 0.15s; }
   .remove-btn:hover { color: var(--red); }
 
-  .restore-btn {
-    border: 1px solid var(--border);
-    background: transparent;
-    color: var(--text-dim);
-    font-size: 10px;
-    padding: 3px 8px;
-    border-radius: 3px;
-    cursor: pointer;
-    font-family: inherit;
-    transition: all 0.15s;
-    flex: 1;
-    text-align: center;
-  }
-
+  .restore-btn { border: 1px solid var(--border); background: transparent; color: var(--text-dim); font-size: 10px; padding: 3px 8px; border-radius: 3px; cursor: pointer; font-family: inherit; transition: all 0.15s; flex: 1; text-align: center; }
   .restore-btn:hover { border-color: var(--accent); color: var(--accent); }
 
-  /* PULSE */
-  .active-pulse {
-    display: inline-block;
-    width: 7px; height: 7px;
-    border-radius: 50%;
-    background: var(--green);
-    box-shadow: 0 0 6px var(--green);
-    animation: pulse 1.5s infinite;
-  }
+  .active-pulse { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--green); box-shadow: 0 0 6px var(--green); animation: pulse 1.5s infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
 
-  @keyframes pulse {
-    0%,100% { opacity: 1; }
-    50% { opacity: 0.3; }
-  }
-
-  /* MODAL */
-  .modal-overlay {
-    display: none;
-    position: fixed; inset: 0;
-    background: rgba(0,0,0,0.6);
-    z-index: 200;
-    align-items: center;
-    justify-content: center;
-  }
-
+  /* ── MODAL ── */
+  .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 200; align-items: center; justify-content: center; }
   .modal-overlay.show { display: flex; }
 
-  .modal {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 20px;
-    min-width: 260px;
-    box-shadow: 0 20px 60px rgba(0,0,0,0.6);
-  }
-
+  .modal { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 20px; min-width: 260px; box-shadow: 0 20px 60px rgba(0,0,0,0.6); }
   .modal h3 { font-size: 13px; margin-bottom: 12px; color: var(--accent); letter-spacing: 1px; }
-
-  .modal input {
-    width: 100%;
-    background: var(--surface2);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    color: var(--text);
-    font-family: inherit;
-    font-size: 13px;
-    padding: 8px 12px;
-    outline: none;
-    margin-bottom: 12px;
-  }
-
+  .modal input { width: 100%; background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-family: inherit; font-size: 13px; padding: 8px 12px; outline: none; margin-bottom: 12px; }
   .modal input:focus { border-color: var(--accent); }
-
   .modal-btns { display: flex; gap: 8px; justify-content: flex-end; }
-
-  .modal-btns button {
-    border: none;
-    border-radius: 6px;
-    padding: 7px 16px;
-    font-family: inherit;
-    font-size: 12px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: opacity 0.15s;
-  }
-
+  .modal-btns button { border: none; border-radius: 6px; padding: 7px 16px; font-family: inherit; font-size: 12px; font-weight: 600; cursor: pointer; transition: opacity 0.15s; }
   .modal-btns button:hover { opacity: 0.8; }
   .btn-confirm { background: var(--accent); color: #000; }
   .btn-cancel  { background: var(--surface2); color: var(--text-dim); border: 1px solid var(--border) !important; }
 
-  /* ── スマホ (2/3スケール) ── */
+  /* ── スマホ ── */
   @media (max-width: 600px) {
     html { font-size: 86.7%; }
-
-    .layout { grid-template-columns: 150px 1fr; }
-
-    .sidebar { height: 100vh; }
-
-    .tables-grid { grid-template-columns: 1fr; }
-
-    .main { padding: 10px 8px; }
-
-    .cast-table-btns button { font-size: 12px; padding: 5px 6px; }
+    #appScreen { grid-template-columns: 150px 1fr !important; }
+    #mainArea { padding: 8px; }
+    .tables-layout { flex-direction: column; }
+    .table-col { flex-direction: row; flex-wrap: wrap; }
+    .table-col .table-card { flex: 1; min-width: 140px; }
   }
 </style>
 </head>
 <body>
 
-<header>
-  <div class="logo">FLOOR MANAGER</div>
-  <div class="header-time" id="clock"></div>
-</header>
+<!-- LOGIN -->
+<div id="loginScreen">
+  <div class="login-box">
+    <div class="login-logo">FLOOR MANAGER</div>
+    <div class="login-label">ルームID を入力</div>
+    <input class="login-input" type="text" id="roomInput" placeholder="例: shop01" maxlength="20">
+    <button class="login-btn" onclick="doLogin()">入室する</button>
+    <div class="login-note">同じIDを入力すると<br>リアルタイムで画面が同期されます</div>
+  </div>
+</div>
 
-<div class="layout">
+<!-- APP -->
+<div id="appScreen">
+
+  <!-- HEADER (全幅) -->
+  <div class="app-header" style="grid-column:1/-1">
+    <div class="logo">FLOOR MANAGER</div>
+    <div class="header-center">
+      <button class="vm-btn active" id="vm_all"    onclick="setViewMode('all')">全体</button>
+      <button class="vm-btn"        id="vm_tables" onclick="setViewMode('tables')">席のみ</button>
+      <button class="vm-btn"        id="vm_cast"   onclick="setViewMode('cast')">キャストのみ</button>
+    </div>
+    <div class="header-right">
+      <span class="room-badge" id="roomLabel"></span>
+      <span class="header-time" id="clock"></span>
+      <button class="logout-btn" onclick="doLogout()">退出</button>
+    </div>
+  </div>
+
   <!-- SIDEBAR -->
-  <div class="sidebar">
+  <div id="sidebar">
     <div class="sidebar-header">
       <span class="sidebar-title">CAST</span>
       <span class="cast-count" id="castCount">0</span>
     </div>
-
     <div class="page-tabs">
       <button class="page-tab active" id="sideTab1" onclick="switchPage(1)">席 1–5</button>
       <button class="page-tab"        id="sideTab2" onclick="switchPage(2)">席 6–10</button>
     </div>
-
     <div class="cast-list" id="girls"></div>
-
     <div class="add-cast">
       <input type="text" id="newGirl" placeholder="キャスト名…" onkeydown="if(event.key==='Enter')addGirl()">
       <button class="btn-add" onclick="addGirl()">+</button>
@@ -671,13 +1092,14 @@
   </div>
 
   <!-- MAIN -->
-  <div class="main">
+  <div id="mainArea">
     <div class="main-tabs">
       <button class="main-tab active" id="mainTab1" onclick="switchPage(1)">席 1〜5</button>
       <button class="main-tab"        id="mainTab2" onclick="switchPage(2)">席 6〜10</button>
     </div>
-    <div class="tables-grid" id="tables"></div>
+    <div id="tables"></div>
   </div>
+
 </div>
 
 <!-- Edit Modal -->
@@ -692,342 +1114,5 @@
   </div>
 </div>
 
-<script>
-let state = {
-  girls: ["A", "B", "C"],
-  tables: {}
-};
-
-let editTarget = null;
-let currentPage = 1;
-
-/* ── 永続化 ── */
-function save() {
-  localStorage.setItem("floorState", JSON.stringify(state));
-}
-
-function load() {
-  try {
-    const d = localStorage.getItem("floorState");
-    if (d) state = JSON.parse(d);
-  } catch(e) {}
-}
-
-load();
-
-/* ── 時間フォーマット ── */
-function formatTime(ms) {
-  let s = Math.floor(ms / 1000);
-  let h = Math.floor(s / 3600);
-  let m = Math.floor((s % 3600) / 60);
-  let sec = s % 60;
-  if (h > 0) return `${h}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`;
-  return `${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`;
-}
-
-/* ── 時計 ── */
-function updateClock() {
-  const now = new Date();
-  document.getElementById("clock").textContent =
-    now.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-}
-setInterval(updateClock, 1000);
-updateClock();
-
-/* ── ページ切替 ── */
-function switchPage(page) {
-  currentPage = page;
-  document.getElementById("sideTab1").classList.toggle("active", page === 1);
-  document.getElementById("sideTab2").classList.toggle("active", page === 2);
-  document.getElementById("mainTab1").classList.toggle("active", page === 1);
-  document.getElementById("mainTab2").classList.toggle("active", page === 2);
-  render();
-}
-
-function pageRange() {
-  return currentPage === 1 ? [1,2,3,4,5] : [6,7,8,9,10];
-}
-
-/* ── タイプ → CSSクラス ── */
-function getTypeClass(type) {
-  if (type === "指名")   return "nomination";
-  if (type === "場内指名") return "floor-nom";
-  if (type === "一時離席") return "leave";
-  return "help";
-}
-
-/* ── キャスト表示 ── */
-function renderGirls() {
-  const g = document.getElementById("girls");
-  g.innerHTML = "";
-  document.getElementById("castCount").textContent = state.girls.length;
-
-  const range = pageRange();
-
-  state.girls.forEach(name => {
-    const div = document.createElement("div");
-    div.className = "cast-item";
-
-    const tableBtns = range.map(i =>
-      `<button onclick="assignToTable('${name}',${i})">席${i}</button>`
-    ).join("");
-
-    div.innerHTML = `
-      <div class="cast-name">
-        <span class="cast-dot"></span>
-        <span>${name}</span>
-      </div>
-      <div class="cast-table-btns">${tableBtns}</div>
-      <div class="cast-actions">
-        <button onclick="openEditModal('${name}')">✎ 編集</button>
-        <button onclick="deleteGirl('${name}')" style="color:#e05a7a">✕ 削除</button>
-      </div>
-    `;
-    g.appendChild(div);
-  });
-}
-
-/* ── 席に追加 ── */
-function assignToTable(name, tableId) {
-  if (!state.tables[tableId]) {
-    state.tables[tableId] = { girls: [], time: 0, active: false };
-  }
-  const target = state.tables[tableId];
-  if (target.girls.some(g => g.name === name && !g.isGhost)) return;
-
-  Object.entries(state.tables).forEach(([tid, tbl]) => {
-    if (Number(tid) === tableId) return;
-    tbl.girls.forEach(g => {
-      if (g.name === name && !g.isGhost) {
-        if (g.type === "ヘルプ") {
-          g._remove = true;
-        } else if (g.type === "指名" || g.type === "場内指名") {
-          g.isGhost = true;
-          g.frozenTime = g.time || 0;
-        }
-      }
-    });
-    tbl.girls = tbl.girls.filter(g => !g._remove);
-  });
-
-  target.girls.push({ name, type: "ヘルプ", time: 0, active: true, isGhost: false });
-  save();
-  renderTables();
-}
-
-/* ── キャスト追加 ── */
-function addGirl() {
-  const input = document.getElementById("newGirl");
-  const name = input.value.trim();
-  if (!name) return;
-  if (state.girls.includes(name)) { input.select(); return; }
-  state.girls.push(name);
-  input.value = "";
-  save();
-  render();
-}
-
-/* ── 編集モーダル ── */
-function openEditModal(name) {
-  editTarget = name;
-  document.getElementById("editInput").value = name;
-  document.getElementById("editModal").classList.add("show");
-  setTimeout(() => document.getElementById("editInput").focus(), 50);
-}
-
-function closeModal() {
-  document.getElementById("editModal").classList.remove("show");
-  editTarget = null;
-}
-
-function confirmEdit() {
-  const newName = document.getElementById("editInput").value.trim();
-  if (!newName || !editTarget) { closeModal(); return; }
-  const oldName = editTarget;
-  state.girls = state.girls.map(g => g === oldName ? newName : g);
-  Object.values(state.tables).forEach(t => {
-    t.girls.forEach(g => { if (g.name === oldName) g.name = newName; });
-  });
-  closeModal();
-  save();
-  render();
-}
-
-document.addEventListener("keydown", e => {
-  if (e.key === "Escape") closeModal();
-  if (e.key === "Enter" && document.getElementById("editModal").classList.contains("show")) confirmEdit();
-});
-
-/* ── キャスト削除 ── */
-function deleteGirl(name) {
-  if (!confirm(`「${name}」を削除しますか？`)) return;
-  state.girls = state.girls.filter(g => g !== name);
-  Object.values(state.tables).forEach(t => {
-    t.girls = t.girls.filter(g => g.name !== name);
-  });
-  save();
-  render();
-}
-
-/* ── 席表示 ── */
-function renderTables() {
-  const container = document.getElementById("tables");
-  container.innerHTML = "";
-
-  pageRange().forEach(i => {
-    if (!state.tables[i]) {
-      state.tables[i] = { girls: [], time: 0, active: false };
-    }
-
-    const tbl = state.tables[i];
-    const card = document.createElement("div");
-    card.className = "table-card" + (tbl.active ? " active" : "");
-
-    let girlsHtml = "";
-    if (tbl.girls.length === 0) {
-      girlsHtml = `<div class="empty-table">— 空席 —</div>`;
-    } else {
-      tbl.girls.forEach((g, idx) => {
-        const cls = getTypeClass(g.type);
-        const fade = g.isGhost ? " fade" : "";
-        const displayTime = g.isGhost
-          ? formatTime(g.frozenTime !== undefined ? g.frozenTime : g.time || 0)
-          : formatTime(g.time || 0);
-
-        girlsHtml += `
-          <div class="assigned ${cls}${fade}">
-            <div class="assigned-top">
-              <div class="assigned-name">
-                <span>${g.name}</span>
-                <span class="type-badge">${g.type}</span>
-                ${g.isGhost ? '<span class="ghost-label">移動中</span>' : ''}
-              </div>
-              <div style="display:flex;align-items:center;gap:4px">
-                <span class="assigned-time">${g.isGhost ? '⏸ ' : ''}${displayTime}</span>
-                <button class="remove-btn" onclick="removeGirl(${i},${idx})">✕</button>
-              </div>
-            </div>
-            ${g.isGhost ? `
-              <div class="assigned-btns">
-                <button class="restore-btn" onclick="restore(${i},${idx})">↩ 戻す</button>
-              </div>
-            ` : `
-            <div class="assigned-btns">
-              <button class="type-btn ${g.type==='指名'?'active-nomination':''}"    onclick="setType(${i},${idx},'指名')">指名</button>
-              <button class="type-btn ${g.type==='場内指名'?'active-floor':''}"    onclick="setType(${i},${idx},'場内指名')">場内</button>
-              <button class="type-btn ${g.type==='ヘルプ'?'active-help':''}"      onclick="setType(${i},${idx},'ヘルプ')">ヘルプ</button>
-              <button class="type-btn ${g.type==='一時離席'?'active-leave':''}"   onclick="setType(${i},${idx},'一時離席')">離席</button>
-            </div>
-            `}
-          </div>
-        `;
-      });
-    }
-
-    const guestCount = tbl.guests || 0;
-    card.innerHTML = `
-      <div class="table-header">
-        <div class="table-num">
-          ${tbl.active ? '<span class="active-pulse"></span>' : ''}
-          席 ${i}
-        </div>
-        <span class="table-timer ${tbl.active ? 'running' : ''}">${formatTime(tbl.time)}</span>
-      </div>
-      <div class="table-controls">
-        <button class="btn-timer ${tbl.active ? 'btn-stop' : 'btn-start'}" onclick="toggleTimer(${i})">
-          ${tbl.active ? '■ 停止' : '▶ 開始'}
-        </button>
-        <button class="btn-timer btn-reset" onclick="resetTimer(${i})">↺ リセット</button>
-      </div>
-      <div class="guest-row">
-        <span class="guest-label">👤 客数</span>
-        <div class="guest-counter">
-          <button class="guest-btn" onclick="changeGuests(${i},-1)">−</button>
-          <span class="guest-num">${guestCount}</span>
-          <button class="guest-btn" onclick="changeGuests(${i},1)">＋</button>
-        </div>
-      </div>
-      <div class="table-girls">${girlsHtml}</div>
-    `;
-
-    container.appendChild(card);
-  });
-}
-
-/* ── 客数 ── */
-function changeGuests(tableId, delta) {
-  if (!state.tables[tableId]) return;
-  state.tables[tableId].guests = Math.max(0, (state.tables[tableId].guests || 0) + delta);
-  save();
-  renderTables();
-}
-
-/* ── タイプ変更 ── */
-function setType(tableId, index, type) {
-  state.tables[tableId].girls[index].type = type;
-  save();
-  renderTables();
-}
-
-/* ── 退席 ── */
-function removeGirl(tableId, index) {
-  state.tables[tableId].girls.splice(index, 1);
-  save();
-  renderTables();
-}
-
-/* ── 戻す ── */
-function restore(tableId, index) {
-  const g = state.tables[tableId].girls[index];
-  g.isGhost = false;
-  if (g.frozenTime !== undefined) {
-    g.time = g.frozenTime;
-    delete g.frozenTime;
-  }
-  save();
-  renderTables();
-}
-
-/* ── タイマー ── */
-function toggleTimer(id) {
-  state.tables[id].active = !state.tables[id].active;
-  save();
-  renderTables();
-}
-
-function resetTimer(id) {
-  state.tables[id] = { girls: [], time: 0, active: false, guests: 0 };
-  save();
-  renderTables();
-}
-
-/* ── レンダリング ── */
-function render() {
-  renderGirls();
-  renderTables();
-}
-
-render();
-
-/* ── タイマー更新 ── */
-setInterval(() => {
-  let changed = false;
-  Object.values(state.tables).forEach(t => {
-    if (t.active) {
-      t.time += 1000;
-      t.girls.forEach(g => {
-        if (!g.isGhost && g.type !== "一時離席") {
-          g.time = (g.time || 0) + 1000;
-        }
-      });
-      changed = true;
-    }
-  });
-  if (changed) {
-    save();
-    renderTables();
-  }
-}, 1000);
-</script>
 </body>
 </html>
